@@ -1,0 +1,9 @@
+# Dzil build directories
+/Mojolious-Plugin-REST2*
+[._][Bb]uild/
+release*
+# Temp files
+#.bak$
+#.swp$
+#~$
+
