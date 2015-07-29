@@ -7,13 +7,62 @@ use Lingua::EN::Inflect 1.895 qw/PL/;
 # VERSION
 # ABSTRACT: Mojolious::Plugin::REST2
 
-=head1 SYNOPSIS
+=head1 NAME
 
-  use Mojolious::Plugin::REST2
-  ..
+Mojolious::Plugin::REST2 - Mojolicious Plugin for building RESTful routes
+
+=head1 SYNOPSIS
+ 
+    # In Mojolicious Application
+    $self->plugin( 'REST' => { prefix => 'api', version => 'v1' } );
+ 
+    $routes->rest_routes( name => 'account' );
+ 
+    # Installs following routes:
+ 
+    # /api/v1/accounts             ....  GET     "list_account()"    ^/api/v1/accounts(?:\.([^/]+)$)?
+    # /api/v1/accounts             ....  POST    "create_account()"  ^/api/v1/accounts(?:\.([^/]+)$)?
+    # /api/v1/accounts/:accountId  ....  DELETE  "delete_account()"  ^/api/v1/accounts/([^\/\.]+)(?:\.([^/]+)$)?
+    # /api/v1/accounts/:accountId  ....  GET     "read_account()"    ^/api/v1/accounts/([^\/\.]+)(?:\.([^/]+)$)?
+    # /api/v1/accounts/:accountId  ....  PUT     "update_account()"  ^/api/v1/accounts/([^\/\.]+)(?:\.([^/]+)$)?
+ 
+ 
+    $routes->rest_routes( name => 'account')->rest_routes( name => 'feature');
+
+    # Installs following routes:
+ 
+    # /api/v1/accounts             ....  GET     "list_account()"    ^/api/v1/accounts(?:\.([^/]+)$)?
+    # /api/v1/accounts             ....  POST    "create_account()"  ^/api/v1/accounts(?:\.([^/]+)$)?
+    # /api/v1/accounts/:accountId  ....  DELETE  "delete_account()"  ^/api/v1/accounts/([^\/\.]+)(?:\.([^/]+)$)?
+    # /api/v1/accounts/:accountId  ....  GET     "read_account()"    ^/api/v1/accounts/([^\/\.]+)(?:\.([^/]+)$)?
+    # /api/v1/accounts/:accountId  ....  PUT     "update_account()"  ^/api/v1/accounts/([^\/\.]+)(?:\.([^/]+)$)?
+    # /api/v1/accounts/:accountId/features             ...  GET       "list_account_feature()"          ^/api/v1/accounts/([^\/\.]+)/features
+    # /api/v1/accounts/:accountId/features             ...  POST      "create_account_feature()"        ^/api/v1/accounts/([^\/\.]+)/features
+    # /api/v1/accounts/:accountId/features/:featureId  ...  DELETE    "delete_account_feature()"        ^/api/v1/accounts/([^\/\.]+)/features/([^\/\.]+)
+    # /api/v1/accounts/:accountId/features/:featureId  ...  GET       "read_account_feature()"          ^/api/v1/accounts/([^\/\.]+)/features/([^\/\.]+)
+    # /api/v1/accounts/:accountId/features/:featureId  ...  PUT       "update_account_feature()"        ^/api/v1/accounts/([^\/\.]+)/features/([^\/\.]+)
+
+    $routes->rest_routes( name => 'account')->rest_routes( name => 'feature')->rest_routes( name => 'other');
+    .......
+    .......
 
 
 =head1 DESCRIPTION
+ 
+L<Mojolicious::Plugin::REST2> adds various helpers for L<REST|http://en.wikipedia.org/wiki/Representational_state_transfer>ful
+L<CRUD|http://en.wikipedia.org/wiki/Create,_read,_update_and_delete> operations via
+L<HTTP|http://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol> to your mojolicious application.
+ 
+As much as possible, it tries to follow L<RESTful API Design|https://blog.apigee.com/detail/restful_api_design> principles from Apigee.
+ 
+L<Mojolicious::Plugin::REST2/rest_routes> shortcut could be used in conjuction with L<Mojolicious::Plugin::REST2/data> and L<Mojolicious::Plugin::REST2/message> helper etc, this module makes building RESTful application a breeze.
+ 
+This module is inspired from L<Mojolicious::Plugin::REST>. 
+There are two reasons why I writed this module. One is that some function is not available such as 'under' parameter in L<Mojolicious::Plugin::REST/rest_routes> due to the update of Mojolicious. Anther is that i want to make this module more convinient to use.
+
+The most different between L<Mojolicious::Plugin::REST2> and L<Mojolicious::Plugin::REST> is as below:
+1. you could build a multilevel related routes more convenient and explicit, see example above.
+2. you could use L<Mojolicious::Plugin::REST2/data> and L<Mojolicious::Plugin::REST2/message> etc helper rather than inheriting L<Mojolicious::Controller::REST>. due to other functions are mostly similar, so I named this module L<Mojolicious::Plugin::REST2>
 
 =cut
 
@@ -29,11 +78,20 @@ my $http2crud = {
     },
 };
 
+
 =head1 install_hook
 
 =cut
 
 has install_hook => 1;
+
+
+
+=head2 register
+
+register
+
+=cut
 
 sub register {
   my $self = shift;
@@ -151,7 +209,7 @@ sub register {
             : "/$route_name_plural/$route_id";
 
           $routes->route("${url_prefix}$url")->via($http_crud)
-            ->to(controller => ucfirst $controller, action => $action)
+            ->to("$controller#$action")
             ->name($action);
         }
       }
