@@ -32,7 +32,6 @@ my $http2crud = {
 =head1 install_hook
 
 =cut
- 
 
 has install_hook => 1;
 
@@ -40,7 +39,15 @@ sub register {
   my $self = shift;
   my $app = shift;
   my $options = { ref $_[0] ? %{ $_[0] } : @_};
-  my $url_prefix = $options->{prefix} ? '/'.$options->{prefix} : '';
+
+  # prefix, version, stuff...
+  my $url_prefix = '';
+  my $version = $options->{version};
+  foreach my $modifier (qw(prefix version)) {
+      if ( defined $options->{$modifier} && $options->{$modifier} ne '' ) {
+          $url_prefix .= "/" . $options->{$modifier};
+      }
+  }
 
   # override default http2crud mapping from options...
   if ( exists( $options->{http2crud} ) ) {
@@ -70,55 +77,85 @@ sub register {
           }
       );
   }
-  
-  $app->routes->add_shortcut(   
+
+  $app->helper( data => sub{
+    my $self = shift;
+    my %data = ref $_[0] ? %{ $_[0] } : @_;
+
+    my $json = $self->stash('json');
+    if ( defined $json and defined  $json->{data} ){
+      @{ $json->{ data } }{ keys %data } = values %data;
+    }else{
+      $json->{data} = \%data;
+    }
+    $self->stash( json => $json );
+    return $self;
+  });
+
+  $app->helper( message => sub {
+    my $self = shift;
+    my ( $message, $severity ) = @_;
+    $severity //= 'info';
+    my $json = $self->stash('json');
+
+    if( defined $json->{messages} ) {
+      push $json->{messages}, { text => $message, severity => $severity } ;
+    } else {
+      $json->{messages} = [ { text => $message, severity => $severity } ];
+    }
+
+    $self->stash( json => $json );
+    return $self;
+  });
+
+  $app->helper( message_warn => sub {
+    my $self = shift;
+    $self->message( shift, 'warn' );
+    return $self;
+  });
+
+
+  $app->routes->add_shortcut(
     rest_routes => sub{
       my $routes = shift;
       my $params = { ref $_[0] ? %{ $_[0] } : @_ };
       Mojo::Exception->throw('Route name is required in rest_routes') unless defined $params->{name};
-      $url_prefix = $routes->to_string || $url_prefix;
+
+      # check whether current route is contain prefix or version
+      my $route_name_prefix = $routes->name;
+      my $url_prefix = $routes->to_string =~/$url_prefix/ ? '' : $url_prefix;
 
       # name setting
-      my $route_name = $params->{name};
-      my ( $route_name_lower, $route_name_plural, $route_id );
-      $route_name_lower = lc $route_name;
-      $route_name_plural = PL( $route_name_lower, 10);
-      $route_id = ':'. $route_name_lower . "Id";
+      my $route_name = lc $params->{name};
+      my $controller = $route_name;
+      my $route_name_plural = PL( $route_name, 10);
+      my $route_id = ':'. $route_name . "Id";
+      $route_name_prefix and $route_name = $route_name_prefix . "_" . $route_name;
 
-      # name prefix
-      my $name_prefix = join "_", $url_prefix =~/:(.+?)Id/g;
-      say 'name_prefix' . $name_prefix;
-    
-      # collection routes
-      for my $collection_method ( keys %{ $http2crud->{collection} } ){
-        $params->{methods} 
-          and index( $params->{methods}, substr( $http2crud->{collection}->{$collection_method}, 0, 1 ) ) == -1 
-          and next;
-        my $collection_crud = $http2crud->{collection}->{$collection_method};
-        my $action = $name_prefix 
-          ? $collection_crud . "_" . $name_prefix . "_" . $route_name_lower
-          : $collection_crud . "_" . $route_name_lower;
-        $routes->route("$url_prefix/$route_name_plural")
-          ->via($collection_method)
-          ->to("${route_name_lower}#$action")
-          ->name($action);
+      # build collection and resources  routes
+      for my $resource_type ( keys %{ $http2crud } ) {
+
+        # http_crud signify 'get' 'put' etc HTTP operation
+        for my $http_crud ( keys %{ $http2crud->{$resource_type} } ){
+          $params->{methods}
+            and index( $params->{methods}, substr( $http2crud->{$resource_type}->{$http_crud}, 0, 1 ) ) == -1
+            and next;
+
+          # controller_crud signify 'read','update' etc in controller's method
+          my $controller_crud = $http2crud->{$resource_type}->{$http_crud};
+          my $action = $controller_crud . "_" . $route_name;
+
+          # obtain current url for route
+          my $url = $resource_type eq 'collection' 
+            ? "/$route_name_plural"
+            : "/$route_name_plural/$route_id";
+
+          $routes->route("${url_prefix}$url")->via($http_crud)
+            ->to(controller => ucfirst $controller, action => $action)
+            ->name($action);
+        }
       }
-        
-      # resoures routes
-      for my $resource_method ( keys %{ $http2crud->{resource} } ){
-        $params->{methods} 
-          and index( $params->{methods}, substr( $http2crud->{resource}->{$resource_method}, 0, 1 ) ) == -1 
-          and next;
-        my $resource_crud = $http2crud->{resource}->{$resource_method};
-        my $action = $name_prefix 
-          ? $resource_crud . "_" . $name_prefix . "_" . $route_name_lower
-          : $resource_crud . "_" . $route_name_lower;
-        $routes->route("$url_prefix/$route_name_plural/$route_id")
-          ->via($resource_crud)
-          ->to("${route_name_lower}#$action")
-          ->name($action);
-      }
-      return  $routes->route("$url_prefix/$route_name_plural/$route_id");
+      return $routes->route("$url_prefix/$route_name_plural/$route_id")->name($route_name);
     }
   );
 }
