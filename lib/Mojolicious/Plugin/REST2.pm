@@ -227,9 +227,7 @@ A custom severity value can be used by calling C<message> as(default: 'info'):
 
 Similar to message, but with severity = 'warn'. Returns controller object so that other method calls can be chained.
 
-
 =cut
-
 
 my $http2crud = {
     collection => {
@@ -244,8 +242,6 @@ my $http2crud = {
 };
 
 has install_hook => 1;
-
-
 
 sub register {
   my $self = shift;
@@ -296,7 +292,6 @@ sub register {
   $app->helper( data => sub{
     my $self = shift;
     my %data = ref $_[0] ? %{ $_[0] } : @_;
-
     my $json = $self->stash('json');
     $json = { data => {}, message => [] } unless defined $json;
     @{ $json->{ data } }{ keys %data } = values %data;
@@ -309,13 +304,11 @@ sub register {
     my ( $message, $severity ) = @_;
     $severity //= 'info';
     my $json = $self->stash('json');
-
     if( defined $json->{messages} ) {
       push $json->{messages}, { text => $message, severity => $severity } ;
     } else {
       $json->{messages} = [ { text => $message, severity => $severity } ];
     }
-
     $self->stash( json => $json );
     return $self;
   });
@@ -325,7 +318,6 @@ sub register {
     $self->message( shift, 'warn' );
     return $self;
   });
-
 
   $app->routes->add_shortcut(
     rest_routes => sub{
